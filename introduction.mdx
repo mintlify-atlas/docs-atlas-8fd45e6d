@@ -1,0 +1,58 @@
+---
+title: "ProxyDroid: open-source global proxy app for Android"
+description: "ProxyDroid is an open-source Android app that transparently routes all device traffic through HTTP, SOCKS4, or SOCKS5 proxy servers."
+---
+
+ProxyDroid is a global transparent proxy app for Android. It intercepts all outbound network traffic on your device and redirects it through a proxy server of your choice — without requiring changes to individual apps. Whether you need to route traffic through a corporate proxy, anonymize connections, or inspect traffic during development, ProxyDroid handles it at the system level.
+
+## How transparent proxying works
+
+Most apps have no built-in proxy support. ProxyDroid solves this by operating below the app layer, capturing traffic before it leaves the device. It supports two modes depending on whether your device has root access:
+
+- **Iptables mode (root required)** — uses Linux `iptables` NAT rules and [redsocks](http://darkk.net.ru/redsocks/) to redirect TCP traffic to the proxy. This is the most reliable method and works for nearly all apps.
+- **VPN mode (no root required)** — creates a local VPN interface using Android's `VpnService` API and [tun2socks](https://github.com/madeye/tun2socks) to forward traffic. This works on unrooted devices but requires accepting the VPN connection prompt.
+
+## Supported proxy protocols
+
+ProxyDroid works with the three most common proxy protocols:
+
+| Protocol | Description |
+|----------|-------------|
+| **HTTP** | Standard HTTP/HTTPS tunneling via the `CONNECT` method |
+| **SOCKS4** | Simple TCP proxy without authentication |
+| **SOCKS5** | Full-featured proxy with optional username/password auth and UDP support |
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Proxy configuration" icon="sliders" href="/configuration/proxy-settings">
+    Set your proxy host, port, and protocol. Switch profiles to manage multiple servers.
+  </Card>
+  <Card title="Traffic control" icon="filter" href="/traffic-control/app-manager">
+    Choose which apps are proxied and exclude specific IP ranges from being routed.
+  </Card>
+  <Card title="VPN mode" icon="shield" href="/advanced/vpn-mode">
+    Run without root access using the built-in VPN-based transparent proxy.
+  </Card>
+  <Card title="App manager" icon="mobile-screen" href="/traffic-control/app-manager">
+    Proxy all apps or select only specific ones using the per-app inclusion list.
+  </Card>
+  <Card title="Authentication" icon="key" href="/configuration/authentication">
+    Authenticate with proxy servers using Basic or NTLM credentials.
+  </Card>
+  <Card title="PAC scripts" icon="file-code" href="/configuration/pac-scripts">
+    Provide a PAC URL for dynamic proxy auto-configuration rules.
+  </Card>
+  <Card title="Auto-connect" icon="wifi" href="/traffic-control/auto-connect">
+    Activate the proxy automatically when connecting to specific Wi-Fi networks.
+  </Card>
+  <Card title="Home screen widget" icon="table-cells" href="/advanced/widget">
+    Toggle the proxy on and off directly from your Android home screen.
+  </Card>
+</CardGroup>
+
+## Open source
+
+ProxyDroid is free and open source, distributed under the [GNU General Public License v3.0 (GPLv3)](https://www.gnu.org/licenses/gpl-3.0.html). Source code is available on [GitHub](https://github.com/madeye/proxydroid). It bundles several other open-source components — including redsocks, tun2socks, and netfilter/iptables — each under their respective licenses.
+
+ProxyDroid supports Android 5.0 (API 21) and later, targeting Android 13 (API 33), and runs on `armeabi-v7a`, `arm64-v8a`, `x86`, and `x86_64` architectures.

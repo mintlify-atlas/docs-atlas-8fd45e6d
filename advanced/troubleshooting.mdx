@@ -1,0 +1,77 @@
+---
+title: "Troubleshoot common ProxyDroid connection problems"
+description: "Diagnose and fix ProxyDroid issues including missing root access, iptables REDIRECT failures, VPN consent dialogs, and PAC script errors."
+---
+
+Most ProxyDroid issues fall into a small number of categories: root access problems, kernel limitations, permission dialogs, and misconfigured proxy settings. Work through the relevant section below to resolve your issue.
+
+<Tip>
+Before troubleshooting, verify your proxy credentials with a known-good SOCKS5 client such as `curl --socks5 <host>:<port> https://example.com` from another device. If the proxy itself is unreachable, no amount of ProxyDroid configuration will help.
+</Tip>
+
+<Warning>
+Using the **Recovery** option (menu → **Recovery**) stops the proxy service immediately and flushes all iptables OUTPUT rules. Any connections currently routed through the proxy will drop. Only use Recovery when you need to reset a stuck iptables state.
+</Warning>
+
+<AccordionGroup>
+  <Accordion title="No root access detected">
+    **Symptom:** ProxyDroid shows a "no root access" error shortly after you try to enable the proxy in iptables mode.
+
+    **Cause:** ProxyDroid runs `su -c id` to check for root. If the output does not contain `uid=0`, root is considered unavailable. This can happen because the device is not rooted, the root manager app denied access, or `su` is not on the system path.
+
+    **Solutions:**
+    - Open your root manager (Magisk, KernelSU, etc.) and grant superuser access to ProxyDroid.
+    - If your device is not rooted, switch to **VPN Mode** in ProxyDroid settings. VPN mode provides the same proxy functionality without root.
+  </Accordion>
+
+  <Accordion title="iptables REDIRECT not supported">
+    **Symptom:** The proxy appears to start but no traffic is intercepted, or ProxyDroid immediately reports an error after enabling in iptables mode.
+
+    **Cause:** `Utils.getHasRedirectSupport()` runs `iptables -t nat -L -n` and checks for the `REDIRECT` keyword. Some Android kernels ship without the `iptables` NAT `REDIRECT` target compiled in. Custom ROMs and stock images from certain manufacturers are affected.
+
+    **Solution:** Switch to **VPN Mode**. VPN mode uses Android's `VpnService` API and `tun2socks`, which do not depend on kernel NAT support.
+  </Accordion>
+
+  <Accordion title="Proxy not working after enable">
+    **Symptom:** ProxyDroid reports the proxy is running, but apps cannot connect through it. This often follows a crash or forced stop of a previous ProxyDroid session.
+
+    **Cause:** If ProxyDroid is stopped while iptables rules are active, the rules remain in the kernel and can leave traffic in a broken redirect loop, or the local listener (redsocks/tun2socks) is no longer running to receive redirected connections.
+
+    **Solution:** Go to **Menu → Recovery** to flush the stale OUTPUT chain rules (`iptables -t nat -F OUTPUT`), then re-enable the proxy normally.
+  </Accordion>
+
+  <Accordion title="VPN permission dialog appears and the proxy does not start">
+    **Symptom:** When enabling VPN mode, Android shows a consent dialog. Dismissing it or tapping **Cancel** stops the proxy from starting.
+
+    **Cause:** Android requires explicit user consent before any app can create a VPN connection. This is a mandatory system security requirement enforced by `VpnService.prepare()`.
+
+    **Solution:** When the dialog appears, tap **OK**. The dialog only appears once per installation unless you clear ProxyDroid's data. If the dialog is not appearing at all, check that ProxyDroid has not been blocked by your device's battery optimization or restricted background activity settings.
+  </Accordion>
+
+  <Accordion title="App not appearing in the proxied app list">
+    **Symptom:** A specific app is missing from the App Manager list in ProxyDroid when using VPN mode per-app routing.
+
+    **Cause:** ProxyDroid filters the app list by UID. System apps with a UID below `10000` are not shown because they run in privileged contexts where routing them through a user-installed VPN is unreliable.
+
+    **Solution:** System apps cannot be selectively proxied through the per-app list. To route all traffic including system apps, leave the per-app list empty (which routes everything through the VPN). For third-party apps, ensure you are looking at the correct user profile if your device has multiple Android user accounts.
+  </Accordion>
+
+  <Accordion title="Auto-connect not working after network change">
+    **Symptom:** ProxyDroid does not re-enable the proxy automatically when you switch between Wi-Fi and mobile data, even though auto-connect is turned on.
+
+    **Cause:** Auto-connect relies on `ConnectivityBroadcastReceiver`, which listens for `android.net.conn.CONNECTIVITY_CHANGE`. On Android 7.0 and later, apps targeting newer SDK levels no longer receive this broadcast when declared only in the manifest — it must be registered programmatically. Additionally, some devices require location permission for Wi-Fi SSID-based auto-connect logic.
+
+    **Solution:** Make sure ProxyDroid is not in a battery-optimized or "restricted" background state in your device's app settings. On devices running Android 10+, grant **Precise location** permission if SSID-based filtering is enabled.
+  </Accordion>
+
+  <Accordion title="PAC script not loading">
+    **Symptom:** You have configured a PAC (Proxy Auto-Config) URL, but ProxyDroid reports it cannot load the script, or the proxy behaves as if no PAC is configured.
+
+    **Cause:** ProxyDroid fetches the PAC URL at startup from the device's network. If the URL is on an internal network that is not yet reachable, or if the server returns a non-200 response, the PAC script will not load.
+
+    **Solutions:**
+    - Open the PAC URL in a browser on the device to confirm it is reachable.
+    - Make sure the URL uses `http://` or `https://` and the server has a valid TLS certificate (or that ProxyDroid's `usesCleartextTraffic="true"` manifest flag covers your scenario).
+    - If you are hosting the PAC on a local server, verify the device and the server are on the same network before enabling the proxy.
+  </Accordion>
+</AccordionGroup>

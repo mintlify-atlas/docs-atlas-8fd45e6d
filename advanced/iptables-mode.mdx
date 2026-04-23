@@ -1,0 +1,85 @@
+---
+title: "iptables-based transparent proxy mode for rooted devices"
+description: "Use iptables NAT REDIRECT rules on a rooted Android device to transparently intercept all TCP traffic and send it through your proxy."
+---
+
+iptables mode provides system-wide transparent proxying by rewriting the kernel's NAT routing table. Because interception happens inside the kernel, there is no userspace relay overhead — but it requires root access on the device.
+
+<Warning>
+iptables mode will not work without root. ProxyDroid calls `Utils.checkRoot()`, which runs `su -c id` and checks that the output contains `uid=0`. If root is not granted, the service falls back to showing an error. Use VPN mode if your device is not rooted.
+</Warning>
+
+## How it works
+
+On start, `ProxyDroidService` calls `setupIptables()`, which runs a series of `iptables` commands via `su` to redirect outbound TCP connections to a local listener:
+
+- **HTTP proxy** → `redsocks` on port `8123`
+- **SOCKS4 / SOCKS5** → `tun2socks` on port `1080`
+
+The local listener then forwards traffic to your actual proxy server.
+
+```text
+App TCP connection
+    │
+    ▼
+iptables NAT OUTPUT chain
+    │
+    ▼
+REDIRECT → local port (8123 or 1080)
+    │
+    ▼
+redsocks / tun2socks
+    │
+    ▼
+Proxy server
+```
+
+## iptables rules applied
+
+ProxyDroidService executes the following commands in sequence:
+
+```bash
+# Flush existing OUTPUT rules
+iptables -t nat -F OUTPUT
+
+# Always bypass localhost
+iptables -t nat -A OUTPUT -d 127.0.0.1 -j RETURN
+
+# Bypass any configured addresses (e.g., your proxy server IP)
+iptables -t nat -A OUTPUT -d <bypass_addr> -j RETURN
+
+# Redirect all remaining TCP to the local listener
+iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports 8123
+```
+
+For SOCKS4 or SOCKS5 proxies, the final `REDIRECT` port is `1080` instead of `8123`.
+
+## REDIRECT support check
+
+Not all Android kernels include the `iptables` `REDIRECT` target. ProxyDroid calls `Utils.getHasRedirectSupport()` at startup, which runs:
+
+```bash
+iptables -t nat -L -n
+```
+
+If the output does not contain `REDIRECT`, the kernel does not support this target. Switch to VPN mode in that case.
+
+## Bypass addresses
+
+Any addresses you add to the bypass list are inserted as `RETURN` rules before the catch-all `REDIRECT`. This prevents traffic to those destinations from going through the proxy — useful for your LAN, VPN, or the proxy server's own IP address.
+
+Configure bypass addresses via **Settings → Bypass Addresses** in the ProxyDroid main screen.
+
+## Recovery
+
+If ProxyDroid crashes or is force-stopped while iptables rules are active, the rules remain in the kernel and can block normal connections.
+
+To flush them, go to **Menu → Recovery**. This runs `clearIptables()`, which executes:
+
+```bash
+iptables -t nat -F OUTPUT
+```
+
+<Warning>
+The Recovery action stops the proxy service and immediately flushes all OUTPUT NAT rules. Any active connections routed through the proxy will be dropped.
+</Warning>

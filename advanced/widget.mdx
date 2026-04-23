@@ -1,0 +1,43 @@
+---
+title: "ProxyDroid Android home screen widget for quick toggle"
+description: "Add the ProxyDroid widget to your Android home screen to start or stop the proxy service with a single tap, without opening the app."
+---
+
+The ProxyDroid home screen widget gives you a single-tap toggle for the proxy service directly from your launcher. When the proxy is running, the widget shows an active indicator; when it is stopped, it shows an inactive state. A transitional state icon appears briefly while the service is starting or stopping.
+
+## How the widget works
+
+The widget is implemented as a `AppWidgetProvider` (`ProxyDroidWidgetProvider`). Tapping the widget sends an `APPWIDGET_UPDATE` broadcast with the action `org.proxydroid.ProxyDroidWidgetProvider.PROXY_SWITCH_ACTION`. The provider's `onReceive` method handles this:
+
+- If the proxy service is running (`Utils.isWorking()` returns `true`), it calls `stopService`.
+- If the proxy service is stopped, it reads the saved profile from `SharedPreferences` and calls `startService`.
+
+The widget updates its icon whenever the proxy state changes, so what you see on the home screen always reflects the current status.
+
+<Note>
+The widget uses the same profile saved in ProxyDroid's settings. Changes you make in the app are picked up immediately the next time you tap the widget.
+</Note>
+
+## Add the widget to your home screen
+
+<Steps>
+  <Step title="Long-press on an empty area of your home screen">
+    Hold your finger on a blank spot of the launcher until the customization menu appears. On most launchers this reveals options like Wallpapers, Widgets, and Settings.
+  </Step>
+  <Step title="Open the Widgets panel">
+    Tap **Widgets** to browse available widgets. The exact label varies by launcher — some use "Add widgets" or show a widget drawer automatically.
+  </Step>
+  <Step title="Find ProxyDroid">
+    Scroll the widget list or use the search bar to locate **ProxyDroid**. The widget appears as a single toggle icon.
+  </Step>
+  <Step title="Drag the widget to your home screen">
+    Long-press the ProxyDroid widget and drag it to the position you want on your home screen, then release to place it.
+  </Step>
+  <Step title="Tap to toggle">
+    Tap the widget once to start or stop the proxy. The icon updates to reflect the current state.
+  </Step>
+</Steps>
+
+<Note>
+The steps above describe the standard Android launcher flow. Samsung One UI, Xiaomi MIUI, and other custom launchers may use slightly different labels or gestures. The widget placement process is the same across Android versions, but on Android 12 and later the widget picker shows a preview before you place the widget.
+</Note>

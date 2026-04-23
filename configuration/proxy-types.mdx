@@ -1,0 +1,95 @@
+---
+title: "HTTP, SOCKS4, and SOCKS5 proxy protocol comparison"
+description: "Understand the differences between HTTP, SOCKS4, and SOCKS5 proxy protocols and choose the right type for your network environment."
+---
+
+ProxyDroid supports three proxy protocols — HTTP, SOCKS4, and SOCKS5 — plus an HTTPS variant for certificate-based connections. The selected protocol determines both how traffic is forwarded to the remote server and which local port `iptables` redirects device traffic to.
+
+## How the local port is selected
+
+When the proxy service starts, `ProxyDroidService` uses the `proxyType` field to pick a local redirect port:
+
+```kotlin
+val localPort = when (proxyType) {
+    "http"            -> 8123
+    "socks4", "socks5" -> 1080
+    else              -> 8123
+}
+```
+
+All device TCP traffic is then redirected to that local port via an `iptables` NAT rule, which forwards it upstream through your configured proxy server.
+
+## Proxy type reference
+
+<Tabs>
+  <Tab title="HTTP">
+    **HTTP proxy** is the default (`proxyType = "http"`). It uses the HTTP CONNECT method to tunnel TCP connections through the proxy server.
+
+    - Local redirect port: **8123**
+    - Works with standard HTTP and HTTPS traffic via CONNECT tunneling
+    - Widely supported by corporate and consumer proxy servers
+    - Does not require authentication unless you enable it separately in [Authentication](/configuration/authentication)
+
+    **When to use:** Use HTTP when your proxy server is a standard HTTP forward proxy, or when the server explicitly supports HTTP CONNECT. This is the most common choice for web browsing through a corporate proxy.
+
+    **Example configuration:**
+
+    ```
+    Host: proxy.example.com
+    Port: 8080
+    Proxy Type: http
+    ```
+  </Tab>
+  <Tab title="SOCKS4">
+    **SOCKS4** is an older SOCKS protocol that supports TCP connections but not UDP or authentication.
+
+    - Local redirect port: **1080**
+    - TCP-only; no UDP relay support
+    - No authentication support (credentials are ignored even if entered)
+    - Lower overhead than HTTP CONNECT for non-HTTP traffic
+
+    **When to use:** Use SOCKS4 when connecting to a legacy SOCKS server that does not support SOCKS5, or when you need a lightweight TCP tunnel without authentication.
+
+    **Example configuration:**
+
+    ```
+    Host: socks.example.com
+    Port: 1080
+    Proxy Type: socks4
+    ```
+  </Tab>
+  <Tab title="SOCKS5">
+    **SOCKS5** is the current SOCKS standard. It supports TCP, UDP relay, and username/password authentication.
+
+    - Local redirect port: **1080**
+    - Supports authentication — enable it in [Authentication](/configuration/authentication)
+    - Broader protocol support than SOCKS4
+    - Required for DNS-over-proxy when DNS proxy mode is enabled
+
+    **When to use:** Use SOCKS5 when your proxy server supports it and you need authentication, or when you want the most capable and widely supported SOCKS implementation.
+
+    **Example configuration:**
+
+    ```
+    Host: socks5.example.com
+    Port: 1080
+    Proxy Type: socks5
+    ```
+  </Tab>
+</Tabs>
+
+## HTTPS proxy (certificate-based)
+
+A fourth type, `https`, is available for proxy servers that require TLS client certificates. When `proxyType` is set to `https`, the **Certificate** field in the authentication section becomes active. Enter the path to your client certificate file.
+
+<Note>
+  The HTTPS proxy type is distinct from routing HTTPS web traffic through an HTTP proxy. It refers specifically to a proxy server that itself requires a TLS certificate for the client connection.
+</Note>
+
+## Changing the proxy type
+
+You can change the proxy type only while the proxy service is stopped. Open the **Proxy Type** selector on the main settings screen and choose the protocol that matches your server. The selection is saved to the active profile immediately.
+
+<Warning>
+  Switching between HTTP (`8123`) and SOCKS (`1080`) changes which local port `iptables` redirects traffic to. If you change the proxy type while apps are connected, those connections will be interrupted once you restart the proxy service.
+</Warning>

@@ -1,0 +1,58 @@
+---
+title: "ProxyDroid prerequisites: device and build requirements"
+description: "Device and build prerequisites for ProxyDroid, including Android version, root access, supported architectures, and development toolchain versions."
+---
+
+Before installing or building ProxyDroid, confirm that your device and development environment meet the requirements below.
+
+## Device requirements
+
+### Android version
+
+ProxyDroid requires **Android 5.0 (API 21)** or later. It targets Android 13 (API 33), so it is fully compatible with all Android versions from 5.0 through 13 and beyond.
+
+### Root access
+
+<Note>
+  Root access is only required for **iptables mode**. If you use **VPN mode**, ProxyDroid works on any Android 5.0+ device without root. See [VPN mode](/advanced/vpn-mode) for details.
+</Note>
+
+<Warning>
+  To use iptables mode — which provides the most reliable system-wide proxying — your device must be rooted. Running iptables rules requires superuser (`su`) access. If your device is not rooted, use VPN mode instead.
+</Warning>
+
+| Mode | Root required | How it works |
+|------|--------------|-------------|
+| Iptables mode | Yes | Uses `iptables` NAT rules + redsocks to redirect traffic |
+| VPN mode | No | Uses Android `VpnService` API + tun2socks to forward traffic |
+
+### Supported architectures
+
+ProxyDroid ships native libraries for the following CPU architectures:
+
+- `armeabi-v7a` — 32-bit ARM (most older and mid-range devices)
+- `arm64-v8a` — 64-bit ARM (modern Android devices)
+- `x86` — 32-bit Intel/AMD (emulators, some tablets)
+- `x86_64` — 64-bit Intel/AMD (emulators, Chromebooks)
+
+## Build requirements
+
+To build ProxyDroid from source, you need the following tools installed on your development machine.
+
+| Tool | Required version |
+|------|-----------------|
+| JDK | 11 or later |
+| Android Studio | Any recent version, or Gradle 8.1+ standalone |
+| Android SDK `compileSdk` | 33 (Android 13) |
+| Android NDK | 25.1.8937393 |
+| CMake | 3.22.1 |
+
+You can install the NDK and CMake through the **SDK Manager** in Android Studio (**Settings → SDK Tools**) or via the `sdkmanager` command-line tool:
+
+```bash
+sdkmanager "ndk;25.1.8937393" "cmake;3.22.1"
+```
+
+<Note>
+  The NDK version must match exactly. ProxyDroid's native build scripts (CMake) are pinned to NDK `25.1.8937393`. Using a different NDK version may cause build failures.
+</Note>

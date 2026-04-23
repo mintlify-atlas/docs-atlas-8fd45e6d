@@ -1,0 +1,62 @@
+---
+title: "Configure proxy server host, port, and protocol type"
+description: "Set the host, port, and proxy type for your proxy server connection, and start or stop the proxy service from ProxyDroid's main settings screen."
+---
+
+ProxyDroid's main screen is a preference activity that exposes every connection setting for your proxy server. You edit host, port, and protocol here, then flip the Running toggle to start routing device traffic through the proxy.
+
+## Core connection settings
+
+The following settings define how ProxyDroid connects to your proxy server. All fields are editable only when the proxy is **not** running — they are disabled while the service is active.
+
+| Setting | Key | Description |
+|---|---|---|
+| **Host** | `host` | Hostname or IP address of the proxy server. In PAC mode this field becomes the PAC URL. |
+| **Port** | `port` | Port number the proxy server listens on. |
+| **Proxy Type** | `proxyType` | Protocol used to connect: `http`, `socks4`, or `socks5`. Defaults to `http`. See [Proxy types](/configuration/proxy-types). |
+
+### Host
+
+Enter the fully qualified hostname or IP address of your proxy server. Examples:
+
+```
+proxy.example.com
+192.168.1.100
+```
+
+The field accepts both IPv4 addresses and domain names. Leave blank only when using PAC mode, where this field holds the PAC script URL instead.
+
+### Port
+
+Enter the port number your proxy server listens on. Common defaults are `8080` for HTTP proxies and `1080` for SOCKS proxies. The value must be a valid integer; ProxyDroid stores it as a string internally and parses it on service start.
+
+### Proxy type
+
+Choose the protocol that matches your proxy server's configuration. The selector shows `http`, `socks4`, and `socks5`. Changing the type also changes the local redirect port used by `iptables`. For a full explanation of each type see [Proxy types](/configuration/proxy-types).
+
+## Starting and stopping the proxy
+
+The **Running** toggle (a switch on Android 4.0 and later, a checkbox on older versions) controls the proxy service.
+
+<Steps>
+  <Step title="Configure your settings">
+    Fill in Host, Port, and Proxy Type before enabling the proxy. All settings fields are active while the proxy is stopped.
+  </Step>
+  <Step title="Enable the proxy">
+    Tap the **Running** toggle. ProxyDroid saves your current profile, starts `ProxyDroidService` in the foreground, and sets up `iptables` NAT rules to redirect TCP traffic to the local proxy port.
+  </Step>
+  <Step title="Confirm the service is active">
+    A persistent notification appears in the status bar while the service is running. All settings fields become disabled to prevent configuration changes mid-session.
+  </Step>
+  <Step title="Disable the proxy">
+    Tap the **Running** toggle again. ProxyDroid stops the service and clears the `iptables` rules, restoring direct network access.
+  </Step>
+</Steps>
+
+<Note>
+  All settings fields — host, port, proxy type, authentication, PAC, and profile — are disabled while the proxy is running. Stop the proxy before making any configuration changes.
+</Note>
+
+## Settings are saved per profile
+
+Every field on the main screen is persisted to the active [profile](/configuration/profiles). When you switch profiles, ProxyDroid writes the current values to SharedPreferences under the old profile key, then loads the new profile's JSON into the UI. Changes are saved automatically; there is no explicit save button.

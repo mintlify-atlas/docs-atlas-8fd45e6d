@@ -1,0 +1,108 @@
+---
+title: "Create, rename, and switch proxy configuration profiles"
+description: "Create, rename, switch, and delete named proxy profiles to store separate server configurations for different networks or environments."
+---
+
+A profile is a named set of proxy settings — host, port, type, authentication, PAC configuration, and more — stored as a JSON string in SharedPreferences. ProxyDroid lets you maintain multiple profiles and switch between them from the main settings screen without manually re-entering your configuration each time.
+
+## How profiles are stored
+
+Each profile is serialized by `Profile.toString()` into a JSON object and saved under a numeric key in SharedPreferences. The list of profiles is maintained in two parallel pipe-delimited strings:
+
+- `profileEntries` — display names shown in the dropdown (for example `Work|Home|New Profile`)
+- `profileValues` — numeric keys corresponding to each entry (for example `1|2|0`)
+
+The value `0` is reserved for the "New Profile" option and is never used as an actual profile key. The default profile has key `1` and is created automatically on first launch.
+
+## Switching profiles
+
+Use the **Profile** dropdown at the top of the settings screen to switch between profiles.
+
+<Steps>
+  <Step title="Open the Profile dropdown">
+    Tap **Profile** on the main settings screen. A list of your saved profiles appears, with "New Profile" at the bottom.
+  </Step>
+  <Step title="Select a profile">
+    Tap the profile you want to load. ProxyDroid saves the current settings to the outgoing profile's JSON key, then loads the selected profile's JSON into all settings fields — host, port, proxy type, authentication, PAC, and so on.
+  </Step>
+</Steps>
+
+<Note>
+  Profile switching is disabled while the proxy service is running. Stop the proxy before switching profiles.
+</Note>
+
+## Creating a profile
+
+<Steps>
+  <Step title="Open the Profile dropdown">
+    Tap **Profile** on the main settings screen.
+  </Step>
+  <Step title="Select New Profile">
+    Tap **New Profile** (value `0`). ProxyDroid assigns the next available numeric key to the new profile, adds it to `profileEntries` and `profileValues`, and switches to it with all fields reset to defaults.
+  </Step>
+  <Step title="Configure the new profile">
+    Enter the host, port, proxy type, and any other settings for this profile. Changes are saved automatically when you navigate away or switch profiles.
+  </Step>
+</Steps>
+
+## Renaming a profile
+
+<Steps>
+  <Step title="Open the options menu">
+    Tap the overflow menu (three dots) or the menu button on your device. Select **Change Name**.
+  </Step>
+  <Step title="Enter a new name">
+    A dialog appears with the current profile name pre-filled. Edit the name and tap **OK**.
+  </Step>
+  <Step title="Confirm the change">
+    The profile dropdown summary and the `profileEntries` list in SharedPreferences are updated immediately. The pipe character (`|`) is stripped from the name if present, since it is used as a delimiter internally.
+  </Step>
+</Steps>
+
+## Deleting a profile
+
+<Steps>
+  <Step title="Switch to the profile you want to delete">
+    The delete action always applies to the currently active profile.
+  </Step>
+  <Step title="Open the options menu">
+    Tap the overflow menu or the menu button and select **Delete Profile**.
+  </Step>
+  <Step title="Confirm deletion">
+    A confirmation dialog appears. Tap **OK** to delete the profile. ProxyDroid removes it from `profileEntries` and `profileValues` and switches to the last remaining profile.
+  </Step>
+</Steps>
+
+<Warning>
+  You cannot delete a profile when only one profile exists (plus the "New Profile" placeholder). The delete action checks that `profileEntries` has more than two entries (at least one real profile and the "New Profile" entry) before proceeding.
+</Warning>
+
+## Profile data format
+
+When a profile is saved, `Profile.toString()` serializes all fields to JSON. Here is an example of what a stored profile looks like:
+
+```json
+{
+  "name": "Work VPN",
+  "host": "proxy.corp.example.com",
+  "port": 8080,
+  "proxyType": "http",
+  "user": "jsmith",
+  "password": "s3cr3t",
+  "domain": "",
+  "isAuth": true,
+  "isNTLM": false,
+  "isDNSProxy": false,
+  "isPAC": false,
+  "isAutoSetProxy": false,
+  "isBypassApps": false,
+  "isAutoConnect": false,
+  "ssid": "",
+  "excludedSsid": "",
+  "proxyApps": "",
+  "bypassAddrs": "",
+  "certificate": ""
+}
+```
+
+This JSON string is stored in SharedPreferences under the profile's numeric key (for example key `"1"` for the default profile). It is read back and decoded by `Profile.decodeJson()` whenever you switch to that profile.

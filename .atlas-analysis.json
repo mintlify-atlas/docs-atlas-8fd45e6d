@@ -1,0 +1,102 @@
+{
+  "projectType": "general",
+  "projectName": "ProxyDroid",
+  "projectDescription": "A global proxy app for Android that routes all device traffic through HTTP, SOCKS4, or SOCKS5 proxy servers using iptables NAT rules or a VPN interface, with support for per-app proxying, PAC scripts, NTLM authentication, and network-based auto-connect.",
+  "theme": "almond",
+  "primaryColor": "#16d3e4",
+  "lightColor": "#efac7e",
+  "darkColor": "#36c4a9",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "requirements",
+              "installation"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
+              "configuration/proxy-settings",
+              "configuration/proxy-types",
+              "configuration/authentication",
+              "configuration/pac-scripts",
+              "configuration/profiles"
+            ]
+          },
+          {
+            "group": "Traffic Control",
+            "pages": [
+              "traffic-control/app-manager",
+              "traffic-control/bypass-list",
+              "traffic-control/auto-connect"
+            ]
+          },
+          {
+            "group": "Advanced",
+            "pages": [
+              "advanced/vpn-mode",
+              "advanced/iptables-mode",
+              "advanced/widget",
+              "advanced/troubleshooting"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Development",
+        "groups": [
+          {
+            "group": "Building",
+            "pages": [
+              "development/building",
+              "development/architecture"
+            ]
+          },
+          {
+            "group": "Internals",
+            "pages": [
+              "development/redsocks",
+              "development/tun2socks",
+              "development/native-code"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Global transparent proxy for all Android traffic via iptables NAT",
+    "VPN-based proxy mode (no root required) using tun2socks",
+    "Supports HTTP, SOCKS4, and SOCKS5 proxy protocols",
+    "PAC (Proxy Auto-Configuration) script support",
+    "NTLM and Basic authentication for enterprise proxies",
+    "Per-app proxy selection or bypass via AppManager",
+    "IP/CIDR bypass list with preset configurations",
+    "Auto-connect based on Wi-Fi SSID",
+    "Multiple named proxy profiles",
+    "Home screen widget for quick toggle"
+  ],
+  "publicApiSurface": [
+    "ProxyDroid (main PreferenceActivity)",
+    "ProxyDroidService (iptables-based proxy service)",
+    "ProxyDroidVpnService (VPN-based proxy service)",
+    "AppManager (per-app proxy selection)",
+    "BypassListActivity (IP bypass list editor)",
+    "Profile (proxy configuration data model)",
+    "Profile.validateAddr(addr)",
+    "Profile.encodeAddrs(addrs)",
+    "Profile.decodeAddrs(encoded)",
+    "Utils.runRootCommand(command)",
+    "Utils.checkRoot()",
+    "Utils.getIptablesPath()",
+    "LocalProxyServer (HTTP-to-SOCKS5 bridge for VPN mode)",
+    "Tun2SocksHelper (native tun2socks bridge)",
+    "Constraints.PRESETS (built-in bypass address presets)"
+  ]
+}

@@ -1,0 +1,95 @@
+---
+title: "Proxy server authentication: Basic, NTLM, certificate"
+description: "Configure Basic or NTLM authentication credentials for enterprise proxy servers, including username, password, domain, and client certificates."
+---
+
+Many corporate and enterprise proxy servers require credentials before allowing traffic through. ProxyDroid supports two authentication schemes — Basic and NTLM — plus client certificate authentication for HTTPS proxy connections. Authentication fields are only available while the proxy service is stopped.
+
+## Authentication fields
+
+The following fields in `Profile.kt` store authentication data:
+
+| Field | Type | Description |
+|---|---|---|
+| `isAuth` | boolean | Enables the authentication fields in the UI |
+| `isNTLM` | boolean | Switches from Basic to NTLM authentication |
+| `user` | string | Username sent to the proxy |
+| `password` | string | Password sent to the proxy (stored as plaintext in SharedPreferences) |
+| `domain` | string | Windows domain name, required for NTLM |
+| `certificate` | string | Path to client certificate file, used with HTTPS proxy type |
+
+## Basic authentication
+
+Basic authentication sends your username and password (Base64-encoded) with each proxy request. Enable it when your proxy server requires credentials but does not use NTLM.
+
+<Steps>
+  <Step title="Enable authentication">
+    On the main settings screen, check the **Authentication** checkbox. The Username and Password fields become active.
+  </Step>
+  <Step title="Enter your username">
+    Tap **Username** and enter the username your proxy server expects.
+  </Step>
+  <Step title="Enter your password">
+    Tap **Password** and enter your password. The summary line in the UI displays `*********` rather than the actual value, but the password is stored in SharedPreferences.
+  </Step>
+  <Step title="Start the proxy">
+    Toggle **Running** to start the service. ProxyDroid passes the credentials to the proxy backend.
+  </Step>
+</Steps>
+
+## NTLM authentication
+
+NTLM is used by Microsoft proxy servers such as ISA Server and Forefront TMG. It requires a username, password, and Windows domain name. ProxyDroid uses `cntlm` under the hood to handle the NTLM handshake.
+
+<Steps>
+  <Step title="Enable authentication">
+    Check the **Authentication** checkbox. The Username, Password, and NTLM fields become active.
+  </Step>
+  <Step title="Enable NTLM">
+    Check the **NTLM** checkbox. The Domain field becomes active.
+  </Step>
+  <Step title="Enter your credentials">
+    Tap **Username** and enter your Windows username. Tap **Password** and enter your Windows password.
+  </Step>
+  <Step title="Enter your domain">
+    Tap **Domain** and enter your Windows domain name (for example, `CORP` or `example.local`). The domain field is only active when both Authentication and NTLM are enabled.
+  </Step>
+  <Step title="Start the proxy">
+    Toggle **Running**. ProxyDroid passes the domain, username, and password to `cntlm`, which performs the NTLM handshake with the proxy server on your behalf.
+  </Step>
+</Steps>
+
+<Note>
+  The Domain field is only enabled when **both** the Authentication checkbox and the NTLM checkbox are checked. Checking NTLM alone without Authentication has no effect.
+</Note>
+
+## Certificate authentication
+
+Client certificate authentication applies only when **Proxy Type** is set to `https`. The Certificate field accepts a file path to a certificate stored on the device.
+
+<Steps>
+  <Step title="Set proxy type to HTTPS">
+    On the main settings screen, set **Proxy Type** to `https`. The Certificate field becomes active.
+  </Step>
+  <Step title="Enter the certificate path">
+    Tap **Certificate** and enter the absolute path to the certificate file on your device, for example `/sdcard/client.p12`.
+  </Step>
+  <Step title="Start the proxy">
+    Toggle **Running**. The certificate path is passed to the proxy service at start time.
+  </Step>
+</Steps>
+
+## UI behavior
+
+ProxyDroid enforces field dependencies in the settings screen:
+
+- When **Authentication** is unchecked: Username, Password, and NTLM are all disabled
+- When **Authentication** is checked but **NTLM** is unchecked: Domain is disabled
+- When **Authentication** is checked and **NTLM** is checked: all auth fields including Domain are active
+- When **Proxy Type** is not `https`: Certificate is disabled
+
+These rules are enforced both on resume and whenever a checkbox value changes, so the UI always reflects which fields are relevant.
+
+<Warning>
+  Credentials are stored as plaintext in Android SharedPreferences. Anyone with root access to the device can read the stored username and password. Avoid storing credentials for highly sensitive accounts on shared or rooted devices.
+</Warning>

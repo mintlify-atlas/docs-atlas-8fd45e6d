@@ -1,0 +1,114 @@
+---
+title: "Bypass list: exclude IP addresses and CIDR ranges from proxy"
+description: "Exclude specific IP addresses and CIDR network ranges from proxy traffic so those destinations are reached directly without going through the proxy."
+---
+
+The Bypass List lets you define IP addresses and network ranges that should bypass the proxy entirely. Traffic destined for any address in this list is sent directly, regardless of other proxy settings. This is useful for local network access, loopback addresses, or regional IP ranges you want to reach without proxying.
+
+## Opening the Bypass List
+
+In the ProxyDroid settings screen, tap **Bypass Addresses** to open the Bypass List. The screen shows all currently configured addresses and provides buttons to add, import, export, and apply presets.
+
+<Note>
+  Addresses use standard IPv4 notation. CIDR ranges are supported with a subnet mask from `/0` (all IPs) to `/32` (a single host). For example, `192.168.1.0/24` covers all 256 addresses in that subnet.
+</Note>
+
+## Adding an address manually
+
+<Steps>
+  <Step title="Tap Add">
+    Tap the **Add** button at the top of the Bypass List screen. A dialog opens with the field pre-filled as `0.0.0.0/0`.
+  </Step>
+  <Step title="Enter the address or range">
+    Clear the field and type your address. Examples:
+
+    ```text
+    192.168.0.0/16
+    ```
+
+    ```text
+    10.0.0.0/8
+    ```
+
+    ```text
+    127.0.0.1
+    ```
+  </Step>
+  <Step title="Tap OK">
+    ProxyDroid validates the entry. If the format is invalid, an error toast appears and the entry is not added. Correct the address and try again.
+  </Step>
+</Steps>
+
+## Editing an existing entry
+
+Tap any entry in the list to open the edit dialog. Modify the address and tap **OK** to save. The same validation rules apply as when adding.
+
+## Deleting an entry
+
+Long-press any entry to open a confirmation dialog. Tap **OK** to remove the address from the list.
+
+## Using presets
+
+Tap the **Preset** button to choose from four built-in configurations:
+
+<AccordionGroup>
+  <Accordion title="Empty — no bypass">
+    Clears all entries. Every destination is routed through the proxy.
+  </Accordion>
+  <Accordion title="Localhost only">
+    Bypasses only the loopback address:
+
+    ```text
+    127.0.0.1
+    ```
+  </Accordion>
+  <Accordion title="Local networks">
+    Bypasses loopback and the three standard private IP ranges:
+
+    ```text
+    127.0.0.1
+    10.0.0.0/8
+    192.168.0.0/16
+    172.16.0.0/12
+    ```
+
+    Choose this preset when your proxy is on a remote server but you still need to reach devices on your local network directly.
+  </Accordion>
+  <Accordion title="China IP list">
+    Applies a large set of Chinese domestic IP ranges sourced from the [china_ip_list](https://github.com/17mon/china_ip_list) project (subnets with netmasks `/20` and larger are omitted for performance). Use this preset if you want domestic Chinese traffic to bypass an overseas proxy.
+  </Accordion>
+</AccordionGroup>
+
+Applying a preset replaces the current list entirely. A progress indicator is shown while the addresses are loaded.
+
+## Importing from a file
+
+<Steps>
+  <Step title="Tap Import">
+    Tap the **Import** button. A file chooser opens.
+  </Step>
+  <Step title="Select a file">
+    Choose a plain-text file. Each line should contain one IP address or CIDR range. Lines that fail validation are silently skipped.
+  </Step>
+  <Step title="Wait for import">
+    A progress dialog appears while the file is read. The list refreshes automatically when the import finishes.
+  </Step>
+</Steps>
+
+## Exporting to a file
+
+<Steps>
+  <Step title="Tap Export">
+    Tap the **Export** button. A dialog opens with a suggested file path pre-filled using the proxy host name.
+  </Step>
+  <Step title="Confirm or change the path">
+    Review the path and edit it if needed, then tap **OK**.
+  </Step>
+  <Step title="Verify the file">
+    A toast confirms the path where the file was written. The exported file contains one address per line and can be re-imported later.
+  </Step>
+</Steps>
+
+<Warning>
+  Make sure the export path points to a directory where ProxyDroid has write access. Paths inside app-private storage (such as the app's data directory) are safe. Exporting to arbitrary system directories may fail silently on newer Android versions due to scoped storage restrictions.
+</Warning>

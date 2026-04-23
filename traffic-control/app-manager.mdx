@@ -1,0 +1,59 @@
+---
+title: "App Manager: choose which apps route through the proxy"
+description: "Select specific Android apps to route through the proxy, or exclude chosen apps while all other traffic is proxied using bypass mode."
+---
+
+The App Manager gives you per-app control over proxy traffic. Instead of routing every app through the proxy, you can choose exactly which apps participate — either by maintaining an allowlist of apps to proxy, or a blocklist of apps to exclude.
+
+## Opening App Manager
+
+In the ProxyDroid settings screen, tap **Proxied Apps** to open the App Manager. The list loads all installed user apps and displays each one with a checkbox. Apps that are already selected appear at the top of the list.
+
+<Note>
+  System apps with a UID below 10000 are excluded from the list. Only regular user-installed applications appear in App Manager.
+</Note>
+
+## Selecting apps
+
+Tap the checkbox next to any app to toggle it on or off. You can also tap the app's name label to toggle the checkbox. Changes are saved immediately — there is no separate save button.
+
+The list is alphabetically sorted, with currently selected apps grouped at the top for easy review.
+
+## Proxy mode vs bypass mode
+
+App Manager works together with the **Bypass Apps** checkbox in the main settings. These two settings combine to produce two distinct behaviors:
+
+<CardGroup cols={2}>
+  <Card title="Proxy mode" icon="shield-check">
+    **Bypass Apps is off.** Only the apps you check in App Manager are routed through the proxy. All other apps connect directly.
+
+    Use this when you want to proxy a small number of specific apps.
+  </Card>
+  <Card title="Bypass mode" icon="shield-x">
+    **Bypass Apps is on.** All apps are routed through the proxy *except* the apps you check in App Manager.
+
+    Use this when you want global proxying but need to exclude specific apps.
+  </Card>
+</CardGroup>
+
+### Example: proxy only a browser
+
+1. Enable the proxy in ProxyDroid main settings.
+2. Leave **Bypass Apps** unchecked (proxy mode).
+3. Open **Proxied Apps** and check only your browser app.
+
+Only browser traffic will flow through the proxy; all other apps connect directly.
+
+### Example: exclude a local-network app
+
+1. Enable the proxy in ProxyDroid main settings.
+2. Check **Bypass Apps** (bypass mode).
+3. Open **Proxied Apps** and check the app that must not use the proxy (for example, a local network media player).
+
+All apps except the one you selected will use the proxy.
+
+## Relationship with Auto Set Proxy
+
+<Note>
+  The **Proxied Apps** preference and the **Bypass Apps** checkbox are both disabled when **Auto Set Proxy** is enabled. Auto Set Proxy uses Android's system-level proxy setting, which applies globally and cannot be filtered per app through ProxyDroid. Disable Auto Set Proxy first to regain per-app control.
+</Note>

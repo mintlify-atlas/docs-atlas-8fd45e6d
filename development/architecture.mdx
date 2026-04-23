@@ -1,0 +1,162 @@
+---
+title: "ProxyDroid component structure and proxy data flow"
+description: "Overview of ProxyDroid's Android component structure, data flow, and how the iptables and VPN proxy modes are implemented in Kotlin and C."
+---
+
+ProxyDroid is structured around two distinct proxy modes — an iptables-based root mode and a VPN-based no-root mode — each backed by a different native engine. The Kotlin layer manages the UI, Android services, and JNI bindings, while the C/C++ layer provides the actual packet redirection and proxying.
+
+## Project layout
+
+```
+app/
+├── src/main/
+│   ├── java/org/proxydroid/
+│   │   ├── ProxyDroid.kt           # Main PreferenceActivity (UI)
+│   │   ├── ProxyDroidService.kt    # iptables proxy service (root mode)
+│   │   ├── ProxyDroidVpnService.kt # VPN proxy service (no-root mode)
+│   │   ├── AppManager.kt           # Per-app proxy selection UI
+│   │   ├── BypassListActivity.kt   # IP bypass list UI
+│   │   ├── Profile.kt              # Proxy config data model + JSON
+│   │   ├── Exec.kt                 # JNI: native subprocess execution
+│   │   └── utils/
+│   │       ├── Utils.kt            # Root commands, iptables helpers
+│   │       ├── LocalProxyServer.kt # HTTP→SOCKS5 bridge (VPN mode)
+│   │       └── Tun2SocksHelper.kt  # JNI: native tun2socks wrapper
+│   └── cpp/
+│       ├── CMakeLists.txt          # Top-level CMake (4 submodules)
+│       ├── exec/                   # Native subprocess helper
+│       ├── libevent/               # Event loop (used by redsocks)
+│       ├── redsocks/               # Transparent TCP proxy redirector
+│       └── tun2socks/              # TUN→SOCKS5 bridge
+└── build.gradle
+```
+
+## Component reference
+
+<CardGroup cols={2}>
+  <Card title="ProxyDroid" icon="sliders">
+    The main `PreferenceActivity`. Renders the settings UI, manages proxy
+    profiles stored in `SharedPreferences`, and starts/stops the appropriate
+    service. Profiles are serialized as JSON via the `Profile` class.
+  </Card>
+
+  <Card title="ProxyDroidService" icon="shield">
+    Android `Service` for iptables mode (requires root). On start it calls
+    `setupIptables()` to add `OUTPUT` chain `REDIRECT` rules that forward all
+    TCP traffic to the local redsocks listener. On stop it flushes those rules.
+  </Card>
+
+  <Card title="ProxyDroidVpnService" icon="network-wired">
+    Android `VpnService` for no-root mode. Creates a TUN interface via the
+    Android VPN API, then starts the native `tun2socks` library to convert raw
+    IP packets into SOCKS5 connections. For HTTP proxies it also starts
+    `LocalProxyServer` as an HTTP→SOCKS5 bridge.
+  </Card>
+
+  <Card title="AppManager" icon="apps">
+    Activity for selecting which apps are proxied (allowlist) or bypassed
+    (denylist). The resulting package name list is piped into the service via
+    `Intent` extras.
+  </Card>
+
+  <Card title="BypassListActivity" icon="list">
+    UI for managing IP address/CIDR ranges that bypass the proxy. These are
+    passed to iptables as explicit `RETURN` rules before the catch-all
+    `REDIRECT` rule.
+  </Card>
+
+  <Card title="Profile" icon="database">
+    Data model for a single proxy configuration: host, port, type, auth
+    credentials, SSID filters, per-app lists. Serializes to/from JSON and is
+    stored in `SharedPreferences` keyed by profile number.
+  </Card>
+
+  <Card title="ConnectivityBroadcastReceiver" icon="wifi">
+    Listens for `CONNECTIVITY_ACTION` broadcasts to trigger auto-connect when
+    the device joins a matching Wi-Fi SSID or falls back to mobile data.
+  </Card>
+
+  <Card title="ProxyDroidWidgetProvider" icon="square-dashed">
+    Home screen app widget that exposes a toggle to start and stop the proxy
+    service without opening the main activity.
+  </Card>
+
+  <Card title="Utils" icon="wrench">
+    Singleton with helper methods: `runRootCommand()` (su shell execution),
+    `getIptablesPath()`, `checkRoot()`, `isWorking()`, `isConnecting()`,
+    and `copyAssets()` for deploying native binaries to app storage.
+  </Card>
+
+  <Card title="LocalProxyServer" icon="arrow-right-arrow-left">
+    A pure-Kotlin SOCKS5 server bound to `127.0.0.1:1080`. Accepts connections
+    from tun2socks, performs the SOCKS5 handshake (with optional
+    username/password auth) toward the real HTTP upstream, then relays bytes
+    bidirectionally in dedicated threads.
+  </Card>
+
+  <Card title="Tun2SocksHelper" icon="code">
+    JNI wrapper that loads the `tun2socks` native library and exposes
+    `start(tunFd, mtu, socksHost, socksPort, user, password)` and `stop()` to
+    Kotlin. Internally it calls the C `nativeStart` / `nativeStop` methods.
+  </Card>
+
+  <Card title="Exec" icon="terminal">
+    JNI wrapper that loads the `exec` native library and exposes
+    `createSubprocess()`, `waitFor()`, `hangupProcessGroup()`, and `close()`
+    for running shell scripts from within the app.
+  </Card>
+</CardGroup>
+
+## Data flow
+
+### iptables mode (root required)
+
+```
+Device app traffic
+        │
+        ▼
+  iptables OUTPUT chain
+  (REDIRECT --to-ports 8123 for HTTP, 1080 for SOCKS)
+        │
+        ▼
+  redsocks (localhost:8123 / localhost:1080)
+        │
+        ▼
+  Upstream proxy server (HTTP / SOCKS4 / SOCKS5)
+        │
+        ▼
+  Internet
+```
+
+`ProxyDroidService` installs the iptables rules on start and flushes them on stop. Bypass addresses and the loopback range (`127.0.0.1`) receive a `RETURN` rule so they are never redirected.
+
+### VPN mode (no root required)
+
+```
+Device app traffic
+        │
+        ▼
+  Android VPN TUN interface (10.0.0.1/24, MTU 1500)
+        │
+        ▼
+  tun2socks (native, reads raw IP packets from TUN fd)
+        │
+        ├── SOCKS5 proxy? → connects directly to proxy host:port
+        │
+        └── HTTP proxy? → connects to LocalProxyServer (127.0.0.1:1080)
+                                │
+                                ▼
+                        Upstream HTTP proxy server
+        │
+        ▼
+  Internet
+```
+
+`ProxyDroidVpnService` calls `VpnService.Builder` to establish the TUN interface, then starts tun2socks via `Tun2SocksHelper.start()`. When the configured proxy is HTTP rather than SOCKS5, `LocalProxyServer` is started first to act as a SOCKS5 façade on port 1080.
+
+<Info>
+  Per-app proxying in VPN mode is implemented using
+  `VpnService.Builder.addAllowedApplication()` (allowlist) and
+  `addDisallowedApplication()` (denylist), which is a standard Android VPN API
+  feature and does not require any additional privileges.
+</Info>

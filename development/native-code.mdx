@@ -1,0 +1,173 @@
+---
+title: "ProxyDroid native C modules, CMake build, and JNI bindings"
+description: "Guide to ProxyDroid's C/C++ native components, the CMake build system, JNI bindings in Exec.kt and Tun2SocksHelper.kt, and multi-ABI compilation."
+---
+
+ProxyDroid's proxy engines are implemented in C and compiled as native shared libraries for Android. The Kotlin layer calls into these libraries through JNI. This page covers the four native modules, the CMake build configuration, and the JNI wrappers that connect them to the Android runtime.
+
+## Overview
+
+| Module | Language | Purpose |
+|---|---|---|
+| `exec` | C | Subprocess creation and process management |
+| `libevent` | C | Event loop used by redsocks |
+| `redsocks` | C | Transparent TCP proxy redirector (iptables mode) |
+| `tun2socks` | C | TUN interface to SOCKS5 bridge (VPN mode) |
+
+All four modules live under `app/src/main/cpp/` and are compiled by a single CMake project.
+
+## CMake build system
+
+The top-level CMake file at `app/src/main/cpp/CMakeLists.txt` is minimal: it sets the minimum CMake version and delegates to each module's own `CMakeLists.txt` via `add_subdirectory`:
+
+```cmake
+cmake_minimum_required(VERSION 3.22.1)
+
+add_subdirectory(exec)
+add_subdirectory(libevent)
+add_subdirectory(redsocks)
+add_subdirectory(tun2socks)
+```
+
+Gradle invokes CMake automatically during the build, driven by the `externalNativeBuild` block in `app/build.gradle`:
+
+```groovy
+android {
+    ndkVersion "25.1.8937393"
+
+    externalNativeBuild {
+        cmake {
+            version '3.22.1'
+            path "src/main/cpp/CMakeLists.txt"
+        }
+    }
+}
+```
+
+## ABI support
+
+ProxyDroid compiles native code for all four major Android ABIs:
+
+```groovy
+ndk {
+    abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+}
+```
+
+Gradle + CMake produce a separate set of `.so` files for each ABI. All four variants are packaged into the APK and Android selects the correct one at install time based on the device's CPU architecture.
+
+## Native modules
+
+<CardGroup cols={2}>
+  <Card title="exec" icon="terminal">
+    A thin C wrapper around `fork()`/`exec()` and `waitpid()`. Provides the
+    JNI-callable functions used by `Exec.kt` to launch and manage shell
+    subprocesses from within the Android app.
+  </Card>
+
+  <Card title="libevent" icon="rotate">
+    The [libevent](https://libevent.org/) event notification library, bundled
+    as a static dependency of redsocks. Provides the event loop that redsocks
+    uses to multiplex many concurrent proxy connections without threads.
+  </Card>
+
+  <Card title="redsocks" icon="shield">
+    A transparent SOCKS redirector that accepts iptables-redirected TCP
+    connections and forwards them to an upstream HTTP, SOCKS4, or SOCKS5
+    proxy. Used in root mode only.
+  </Card>
+
+  <Card title="tun2socks" icon="network-wired">
+    Reads raw IP packets from the Android VPN TUN file descriptor,
+    reconstructs TCP streams, and proxies them through a SOCKS5 server.
+    Used in no-root VPN mode.
+  </Card>
+</CardGroup>
+
+## JNI bindings
+
+### Exec.kt
+
+`Exec` is a Kotlin singleton that loads the `exec` native library and declares four external (JNI) functions:
+
+```kotlin
+object Exec {
+    init {
+        System.loadLibrary("exec")
+    }
+
+    @JvmStatic
+    external fun createSubprocess(
+        rdt: Int,
+        cmd: String,
+        args: Array<String>?,
+        envVars: Array<String>?,
+        scripts: String?,
+        processId: IntArray
+    ): FileDescriptor
+
+    @JvmStatic
+    external fun waitFor(processId: Int): Int
+
+    @JvmStatic
+    external fun hangupProcessGroup(processId: Int)
+
+    @JvmStatic
+    external fun close(fd: FileDescriptor)
+}
+```
+
+`Utils.runScript()` calls `Exec.createSubprocess()` to execute shell scripts (e.g. proxy startup scripts) and then `Exec.waitFor()` to block until they finish.
+
+### Tun2SocksHelper.kt
+
+`Tun2SocksHelper` loads the `tun2socks` native library and wraps its lifecycle in a thread-safe Kotlin API:
+
+```kotlin
+class Tun2SocksHelper {
+    companion object {
+        init { System.loadLibrary("tun2socks") }
+    }
+
+    // Starts the native tun2socks event loop.
+    // tunFd  – file descriptor from VpnService.Builder.establish()
+    // mtu    – MTU of the TUN interface (1500)
+    fun start(
+        tunFd: Int,
+        mtu: Int,
+        socksHost: String,
+        socksPort: Int,
+        socksUser: String?,
+        socksPassword: String?
+    ): Boolean
+
+    // Signals the native event loop to stop.
+    fun stop()
+}
+```
+
+The `start()` method calls the private `external fun nativeStart(...)` and treats a return value of `0` as success. `stop()` calls `nativeStop()` and resets the `running` flag.
+
+## Build requirements
+
+<Note>
+  The NDK version and CMake version are pinned and must match exactly. Using a
+  different NDK version may produce incompatible toolchain paths and break the
+  native build.
+</Note>
+
+| Tool | Required version |
+|---|---|
+| Android NDK | 25.1.8937393 |
+| CMake | 3.22.1 |
+
+Install both via Android Studio's SDK Manager under **SDK Tools → NDK (Side by side)** and **SDK Tools → CMake**, or with the command-line `sdkmanager`:
+
+```bash
+sdkmanager "ndk;25.1.8937393" "cmake;3.22.1"
+```
+
+<Info>
+  libevent is statically linked into the redsocks shared library during the
+  CMake build. It is not exposed as a separate `.so` file in the final APK.
+</Info>

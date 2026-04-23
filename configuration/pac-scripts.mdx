@@ -1,0 +1,86 @@
+---
+title: "Use PAC scripts for dynamic proxy auto-configuration"
+description: "Use a Proxy Auto-Configuration URL to dynamically route traffic through different proxies or bypass the proxy entirely based on the destination."
+---
+
+Proxy Auto-Configuration (PAC) lets you point ProxyDroid at a JavaScript file that decides, for each outgoing connection, whether to use a proxy and which one. This is useful in environments where some traffic should go through a proxy and other traffic should connect directly.
+
+## How PAC mode works in ProxyDroid
+
+When PAC mode is enabled (`isPAC = true`), the **Host** field changes its meaning: instead of a proxy hostname, it holds the URL of a PAC script. ProxyDroid fetches and evaluates that script using the Rhino JavaScript engine bundled in the app. The Port and Proxy Type fields are not used in PAC mode and are disabled in the UI.
+
+The `isPAC` flag is stored in the active [profile](/configuration/profiles) as a boolean. Switching it on or off immediately updates the Host field label and the enabled state of Port and Proxy Type.
+
+## Enabling PAC mode
+
+<Steps>
+  <Step title="Stop the proxy if it is running">
+    All settings, including PAC, are read-only while the proxy service is active. Toggle **Running** off before making changes.
+  </Step>
+  <Step title="Enable the PAC checkbox">
+    On the main settings screen, check the **PAC** checkbox. The Host field label changes to **PAC URL**, and the Port and Proxy Type selectors are disabled.
+  </Step>
+  <Step title="Enter the PAC URL">
+    Tap the **PAC URL** field and enter the full URL of your PAC script. This can be an HTTP or HTTPS URL, or a `file://` path to a script stored locally on the device.
+
+    ```
+    http://proxy.example.com/proxy.pac
+    https://internal.corp/pac/default.pac
+    file:///sdcard/proxy.pac
+    ```
+  </Step>
+  <Step title="Start the proxy">
+    Toggle **Running**. ProxyDroid fetches the PAC script from the URL and evaluates `FindProxyForURL` for each outgoing TCP connection.
+  </Step>
+</Steps>
+
+<Note>
+  When PAC mode is enabled, the Port and Proxy Type fields are disabled and their values are ignored. All routing decisions come from the PAC script's return value.
+</Note>
+
+## PAC script format
+
+A PAC file is a JavaScript file with a single required function, `FindProxyForURL`. The function receives the destination URL and hostname, and returns a string specifying how to handle the connection.
+
+```javascript
+function FindProxyForURL(url, host) {
+    // Send local network traffic directly
+    if (isInNet(host, "192.168.0.0", "255.255.0.0")) {
+        return "DIRECT";
+    }
+
+    // Send loopback traffic directly
+    if (isInNet(host, "127.0.0.0", "255.0.0.0")) {
+        return "DIRECT";
+    }
+
+    // Route all other traffic through the proxy
+    return "PROXY proxy.example.com:8080";
+}
+```
+
+### Return value format
+
+| Return value | Effect |
+|---|---|
+| `DIRECT` | Connect without a proxy |
+| `PROXY host:port` | Use an HTTP proxy at the given address |
+| `SOCKS host:port` | Use a SOCKS proxy at the given address |
+| Multiple values separated by `;` | Try each in order until one succeeds |
+
+### Common PAC helper functions
+
+| Function | Description |
+|---|---|
+| `isInNet(host, network, mask)` | Returns true if the host IP falls within the given subnet |
+| `isPlainHostName(host)` | Returns true if the host has no dots (local hostname) |
+| `dnsDomainIs(host, domain)` | Returns true if the host ends with the given domain |
+| `shExpMatch(host, pattern)` | Shell-style glob match against the host |
+
+## Disabling PAC mode
+
+Uncheck the **PAC** checkbox. The Host field label reverts to **Host**, and Port and Proxy Type become editable again. The value in the Host field is preserved but interpreted as a proxy server hostname rather than a PAC URL.
+
+<Warning>
+  PAC scripts are executed as JavaScript using the Rhino engine. Only use PAC files from sources you trust. A malicious PAC script can redirect all device traffic to an arbitrary server.
+</Warning>

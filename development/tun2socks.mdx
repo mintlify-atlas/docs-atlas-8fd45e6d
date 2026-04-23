@@ -1,0 +1,157 @@
+---
+title: "tun2socks: Android VPN TUN interface to SOCKS5 bridge"
+description: "How ProxyDroid's VPN mode uses tun2socks to convert raw TUN interface packets into SOCKS5 connections, and how LocalProxyServer bridges HTTP proxies."
+---
+
+In ProxyDroid's no-root VPN mode, tun2socks is the engine that sits between the Android VPN TUN interface and the upstream proxy server. It reads raw IP packets from the virtual network interface and converts each TCP flow into a SOCKS5 connection — making network-layer packet routing transparent to every app on the device.
+
+## How tun2socks works
+
+When `ProxyDroidVpnService` starts, it creates a TUN interface using the Android `VpnService.Builder` API. The interface captures all device traffic and delivers it as raw IP packets on a file descriptor. tun2socks:
+
+1. Reads raw IP/TCP packets from the TUN file descriptor.
+2. Reassembles TCP streams from the raw packets.
+3. Opens a SOCKS5 connection to the upstream proxy for each flow.
+4. Relays data bidirectionally between the TCP stream and the SOCKS5 connection.
+5. Writes response packets back to the TUN fd so they reach the originating app.
+
+This happens entirely in native C code, loaded through JNI.
+
+## VPN interface setup
+
+`ProxyDroidVpnService` builds the VPN interface with fixed parameters:
+
+```kotlin
+private const val VPN_MTU     = 1500
+private const val VPN_ADDRESS = "10.0.0.1"
+private const val VPN_ROUTE   = "0.0.0.0"
+
+val builder = Builder()
+    .setSession(getString(R.string.app_name))
+    .setMtu(VPN_MTU)
+    .addAddress(VPN_ADDRESS, 24)   // TUN address: 10.0.0.1/24
+    .addRoute(VPN_ROUTE, 0)        // Capture all traffic (0.0.0.0/0)
+    .addDnsServer("8.8.8.8")
+    .addDnsServer("8.8.4.4")
+
+vpnInterface = builder.establish()
+```
+
+The resulting `ParcelFileDescriptor` carries the TUN file descriptor that is passed directly to tun2socks.
+
+## JNI interface: Tun2SocksHelper
+
+`Tun2SocksHelper` is the Kotlin JNI wrapper that manages the native tun2socks lifecycle:
+
+```kotlin
+class Tun2SocksHelper {
+    companion object {
+        init { System.loadLibrary("tun2socks") }
+    }
+
+    @Synchronized
+    fun start(
+        tunFd: Int,          // File descriptor for the VPN TUN interface
+        mtu: Int,            // MTU (1500)
+        socksHost: String,   // Upstream SOCKS5 host
+        socksPort: Int,      // Upstream SOCKS5 port
+        socksUser: String?,  // Username (nullable; passes "" to native if null)
+        socksPassword: String? // Password (nullable; passes "" to native if null)
+    ): Boolean               // Returns true if native start succeeded (result == 0)
+
+    @Synchronized
+    fun stop()               // Calls nativeStop() and clears the running flag
+}
+```
+
+Internally, `start()` calls `nativeStart(tunFd, mtu, socksHost, socksPort, socksUser ?: "", socksPassword ?: "")`. A return value of `0` from native is treated as success. `stop()` calls `nativeStop()` and resets the `running` flag. Both methods are `@Synchronized`.
+
+## HTTP proxy support via LocalProxyServer
+
+tun2socks speaks SOCKS5 natively. When the user selects an HTTP upstream proxy, `ProxyDroidVpnService` starts `LocalProxyServer` first to act as a local SOCKS5 façade:
+
+```kotlin
+if (proxyType == "http") {
+    localProxyServer = LocalProxyServer(
+        LOCAL_SOCKS_PORT,   // 1080
+        host,               // upstream HTTP proxy host
+        port,               // upstream HTTP proxy port
+        if (user.isNotEmpty()) user else null,
+        if (password.isNotEmpty()) password else null
+    )
+    localProxyServer?.start()
+}
+
+val socksHost = if (proxyType == "http") "127.0.0.1" else host
+val socksPort = if (proxyType == "http") LOCAL_SOCKS_PORT else port
+
+tun2SocksHelper?.start(vpnInterface!!.fd, VPN_MTU, socksHost, socksPort, ...)
+```
+
+`LocalProxyServer` is a pure-Kotlin SOCKS5 server bound to `127.0.0.1:1080`. For every incoming connection it:
+
+1. Opens a TCP connection to the real HTTP upstream proxy.
+2. Performs the SOCKS5 handshake (including username/password auth if configured).
+3. Relays bytes bidirectionally in two threads using an 8 KB buffer.
+
+## Data flow
+
+### SOCKS5 upstream
+
+```
+Device app
+    │
+    ▼
+Android VPN TUN (10.0.0.1/24, MTU 1500)
+    │  raw IP packets
+    ▼
+tun2socks (native library)
+    │  SOCKS5 CONNECT
+    ▼
+Upstream SOCKS5 proxy (host:port)
+    │
+    ▼
+Internet
+```
+
+### HTTP upstream
+
+```
+Device app
+    │
+    ▼
+Android VPN TUN (10.0.0.1/24, MTU 1500)
+    │  raw IP packets
+    ▼
+tun2socks (native library)
+    │  SOCKS5 CONNECT to 127.0.0.1:1080
+    ▼
+LocalProxyServer (Kotlin, 127.0.0.1:1080)
+    │  SOCKS5 relay → HTTP CONNECT
+    ▼
+Upstream HTTP proxy (host:port)
+    │
+    ▼
+Internet
+```
+
+## Per-app VPN filtering
+
+`ProxyDroidVpnService` uses the standard Android VPN API to limit which apps are captured by the TUN interface:
+
+```kotlin
+// Allowlist mode: only proxy these apps
+builder.addAllowedApplication(packageName)
+
+// Denylist (bypass) mode: exclude these apps from VPN
+builder.addDisallowedApplication(packageName)
+```
+
+This does not require root and is enforced by the Android VPN framework before packets reach the TUN interface.
+
+<Tip>
+  For SOCKS5 proxies, credentials are forwarded directly from
+  `Tun2SocksHelper.start()` to the native layer. For HTTP proxies, credentials
+  are consumed by `LocalProxyServer`'s SOCKS5 authentication exchange with the
+  upstream, so they never pass through the JNI boundary.
+</Tip>

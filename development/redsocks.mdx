@@ -1,0 +1,116 @@
+---
+title: "redsocks: transparent SOCKS proxy redirector internals"
+description: "How redsocks enables transparent TCP proxying in ProxyDroid's iptables mode, integrating with netfilter NAT rules and supported upstream proxy protocols."
+---
+
+redsocks is an open-source C library that acts as a transparent proxy redirector. In ProxyDroid's iptables (root) mode, redsocks sits between the kernel's netfilter layer and the upstream proxy server — accepting TCP connections that the kernel has silently redirected and forwarding them to the real proxy without any per-app configuration.
+
+<Note>
+  redsocks requires a rooted device. ProxyDroid uses it only when root access is
+  detected. On non-rooted devices the VPN mode with tun2socks is used instead.
+</Note>
+
+## What redsocks does
+
+When the proxy is active in iptables mode, `ProxyDroidService` installs iptables `REDIRECT` rules into the `OUTPUT` chain. These rules silently intercept all outgoing TCP packets and hand them to a local port where redsocks is listening. redsocks then:
+
+1. Accepts the redirected TCP connection from the kernel.
+2. Reads the original destination address from the socket (using `SO_ORIGINAL_DST`).
+3. Opens a new connection to the upstream proxy server.
+4. Performs the appropriate proxy handshake (HTTP CONNECT, SOCKS4, or SOCKS5).
+5. Relays data between the local application and the upstream proxy.
+
+The application that opened the original socket is completely unaware that its traffic is being proxied.
+
+## Integration with iptables
+
+`ProxyDroidService.setupIptables()` builds the iptables rule set at startup. The local port that redsocks listens on depends on the selected proxy type:
+
+```kotlin
+val localPort = when (proxyType) {
+    "http"            -> 8123
+    "socks4", "socks5" -> 1080
+    else              -> 8123
+}
+
+commands.append(
+    "$iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports $localPort\n"
+)
+```
+
+Bypass addresses (user-configured CIDRs) and `127.0.0.1` (loopback) receive explicit `RETURN` rules that appear **before** the catch-all `REDIRECT` rule, so they are never sent through the proxy.
+
+The full rule sequence inserted into the `nat OUTPUT` chain is:
+
+```bash
+# Flush any existing rules
+iptables -t nat -F OUTPUT
+
+# Exempt loopback
+iptables -t nat -A OUTPUT -d 127.0.0.1 -j RETURN
+
+# Exempt user-configured bypass addresses (one rule per entry)
+iptables -t nat -A OUTPUT -d <bypass_addr> -j RETURN
+
+# Redirect all remaining TCP traffic to redsocks
+iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports 8123
+```
+
+## Architecture diagram
+
+```
+┌─────────────────────────────────────────────┐
+│                  Device                     │
+│                                             │
+│  App A ──┐                                  │
+│  App B ──┼──► TCP socket (any destination)  │
+│  App C ──┘         │                        │
+│                    │                        │
+│           iptables nat OUTPUT               │
+│           REDIRECT --to-ports 8123          │
+│                    │                        │
+│                    ▼                        │
+│          redsocks (localhost:8123)          │
+│          reads SO_ORIGINAL_DST              │
+│                    │                        │
+└────────────────────┼────────────────────────┘
+                     │
+                     ▼
+         Upstream proxy server
+         (HTTP / SOCKS4 / SOCKS5)
+                     │
+                     ▼
+                 Internet
+```
+
+## Supported upstream protocols
+
+redsocks can forward to three types of upstream proxy:
+
+| Proxy type | Local port | Proxy handshake |
+|---|---|---|
+| HTTP CONNECT | 8123 | `CONNECT host:port HTTP/1.1` |
+| SOCKS4 | 1080 | SOCKS4 connect request |
+| SOCKS5 | 1080 | SOCKS5 negotiate + optional auth |
+
+## Native build
+
+The redsocks source lives in `app/src/main/cpp/redsocks/` and is compiled as a native shared library by CMake. The top-level `CMakeLists.txt` includes it via:
+
+```cmake
+add_subdirectory(redsocks)
+```
+
+redsocks depends on libevent (also bundled under `app/src/main/cpp/libevent/`) for its event-driven I/O loop. Both libraries are compiled for all four supported ABIs (`x86`, `x86_64`, `armeabi-v7a`, `arm64-v8a`) in a single Gradle build.
+
+## Reference
+
+The original redsocks project is maintained by Leonid Evdokimov and is distributed under the Apache 2.0 licence.
+
+- Homepage: [http://darkk.net.ru/redsocks/](http://darkk.net.ru/redsocks/)
+- GitHub: [https://github.com/darkk/redsocks](https://github.com/darkk/redsocks)
+
+<Info>
+  When the proxy is stopped, `ProxyDroidService.clearIptables()` runs
+  `iptables -t nat -F OUTPUT` to remove all rules and restore normal routing.
+</Info>

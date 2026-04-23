@@ -1,0 +1,61 @@
+---
+title: "Auto-connect: activate proxy on specific Wi-Fi SSIDs"
+description: "Automatically enable the proxy when your device connects to specific Wi-Fi networks or mobile data, and disable it on networks you choose to exclude."
+---
+
+Auto Connect lets ProxyDroid start and stop the proxy automatically based on your current network. When your device connects to a network that matches your configured criteria, the proxy is enabled without any manual action. When you switch to a different network, the proxy is stopped.
+
+<Note>
+  Auto Connect uses `ACCESS_WIFI_STATE` and related Wi-Fi permissions to read the connected SSID. Ensure ProxyDroid has been granted the necessary permissions on your device.
+</Note>
+
+## Setting up auto-connect for a specific network
+
+<Steps>
+  <Step title="Enable Auto Connect">
+    In the ProxyDroid settings screen, check the **Auto Connect** checkbox. The **SSID** and **Excluded SSIDs** selectors become active.
+  </Step>
+  <Step title="Open the SSID selector">
+    Tap the **SSID** preference. A multi-select list appears with the following options:
+
+    | Option | Behavior |
+    |--------|----------|
+    | `WIFI/2G/3G` | Connect on any network type (Wi-Fi or mobile data) |
+    | `WIFI` | Connect only when on Wi-Fi, regardless of SSID |
+    | `2G/3G` | Connect only when on mobile data |
+    | Individual SSIDs | Connect only when joined to that specific Wi-Fi network |
+
+    The individual SSIDs shown are pulled from your device's list of configured (saved) Wi-Fi networks.
+  </Step>
+  <Step title="Select your target network">
+    Choose one or more entries. To proxy only on your home or office Wi-Fi, select the specific SSID by name. To proxy on all Wi-Fi networks, choose `WIFI`.
+  </Step>
+  <Step title="Configure excluded SSIDs (optional)">
+    If you selected `WIFI/2G/3G` or `WIFI` and want to exclude certain networks, tap **Excluded SSIDs** and select the networks where the proxy should *not* activate automatically.
+
+    For example: select `WIFI/2G/3G` as the trigger, then add your home network to **Excluded SSIDs** so the proxy only auto-connects on untrusted Wi-Fi and mobile data.
+  </Step>
+  <Step title="Verify behavior">
+    Disconnect and reconnect to the target network. ProxyDroid should start the proxy automatically. When you join an excluded or unmatched network, the proxy stops.
+  </Step>
+</Steps>
+
+## How network matching works
+
+`ConnectivityBroadcastReceiver` listens for connectivity change broadcasts. When a network state change is detected, it checks the active network against each saved profile in order:
+
+- If the active connection is **Wi-Fi**, the receiver reads the current SSID and checks it against the configured SSID list. If the SSID appears in the excluded list, auto-connect is skipped for that profile.
+- If the active connection is **mobile data** (`2G/3G`), the receiver matches against `WIFI/2G/3G` or `2G/3G` entries only.
+- If the network disconnects, the proxy is stopped when the last matched SSID was not a mobile-data type.
+
+The first profile that matches triggers auto-connect. ProxyDroid then starts the proxy service for that profile.
+
+## Multiple profiles
+
+Each profile has its own `isAutoConnect`, `ssid`, and `excludedSsid` fields. You can configure different profiles for different networks — for example, one profile with a corporate proxy that auto-connects on your office SSID, and another profile with a personal VPN proxy that auto-connects on mobile data.
+
+When a connectivity change occurs, ProxyDroid scans all profiles in order and activates the first one whose SSID criteria are met.
+
+## Disabling auto-connect
+
+Uncheck **Auto Connect** to stop automatic proxy management. The SSID and Excluded SSID selectors will be grayed out and the proxy will only start or stop when you toggle it manually.

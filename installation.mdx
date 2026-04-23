@@ -1,0 +1,104 @@
+---
+title: "Build and install ProxyDroid on your Android device"
+description: "Build ProxyDroid from source using Android Studio or Gradle, then sideload the APK onto your Android device using adb or manual installation."
+---
+
+ProxyDroid is distributed as source code and must be built before installation. This page walks you through cloning the repository, building the APK, and installing it on your device.
+
+<Note>
+  Before you start, confirm your environment meets all [requirements](/requirements) — including JDK 11+, Android NDK 25.1.8937393, and CMake 3.22.1.
+</Note>
+
+## Build the APK
+
+<Steps>
+  <Step title="Clone the repository">
+    Clone the ProxyDroid source code from GitHub:
+
+    ```bash
+    git clone https://github.com/madeye/proxydroid.git
+    cd proxydroid
+    ```
+  </Step>
+
+  <Step title="Build the APK">
+    Choose your preferred build method — Android Studio or the command line:
+
+    <CodeGroup>
+
+    ```bash Command line (debug)
+    ./gradlew assembleDebug
+    ```
+
+    ```bash Command line (release)
+    ./gradlew assembleRelease
+    ```
+
+    </CodeGroup>
+
+    **Android Studio alternative:**
+
+    1. Open Android Studio and select **Open** → choose the cloned `proxydroid/` directory.
+    2. Wait for Gradle to sync (Android Studio will prompt you to install any missing SDK components).
+    3. Select **Build → Make Project** from the menu bar.
+
+    The first build downloads dependencies and compiles native code via CMake — this may take several minutes.
+  </Step>
+
+  <Step title="Locate the output APK">
+    After a successful build, find the APK at:
+
+    <CodeGroup>
+
+    ```text Debug APK
+    app/build/outputs/apk/debug/app-debug.apk
+    ```
+
+    ```text Release APK
+    app/build/outputs/apk/release/app-release-unsigned.apk
+    ```
+
+    </CodeGroup>
+
+    The debug build is signed with a debug key and ready to install immediately. The release build requires signing with your own keystore before installation.
+  </Step>
+
+  <Step title="Install on your device">
+    Connect your Android device via USB with USB debugging enabled, then install using `adb`:
+
+    ```bash
+    adb install app/build/outputs/apk/debug/app-debug.apk
+    ```
+
+    If you are updating an existing installation, add the `-r` flag to reinstall:
+
+    ```bash
+    adb install -r app/build/outputs/apk/debug/app-debug.apk
+    ```
+  </Step>
+</Steps>
+
+## Sideload without adb
+
+If you prefer to install the APK manually without a computer connection:
+
+1. Transfer the APK file to your Android device (via USB file transfer, cloud storage, or email).
+2. Open your device's **Settings → Security** (or **Settings → Apps → Special app access**).
+3. Enable **Install unknown apps** for the file manager or browser you will use to open the APK.
+4. Tap the APK file and follow the on-screen prompts to install.
+
+<Warning>
+  Enabling installation from unknown sources allows APKs from outside the Play Store. Disable this setting again after installing ProxyDroid if you do not need it for other apps.
+</Warning>
+
+## App details
+
+| Field | Value |
+|-------|-------|
+| App ID (package name) | `org.proxydroid` |
+| Version name | `3.4.0` |
+| Version code | `74` |
+| Minimum Android | 5.0 (API 21) |
+| Target Android | 13 (API 33) |
+
+After installation, open **ProxyDroid** from your app drawer. Configure your proxy server under the settings screen, then toggle the **Running** switch to start routing traffic. See [Proxy Settings](/configuration/proxy-settings) for configuration details.

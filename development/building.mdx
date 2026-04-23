@@ -1,0 +1,129 @@
+---
+title: "Build ProxyDroid from source using Gradle or Android Studio"
+description: "Step-by-step guide to building the ProxyDroid Android APK using Android Studio or the Gradle CLI, including NDK 25.1.8937393 and CMake 3.22.1 setup."
+---
+
+ProxyDroid is built with the standard Android Gradle toolchain and requires the NDK to compile its native C components (redsocks and tun2socks). The instructions below cover both the Android Studio GUI and a fully automated command-line build.
+
+## Prerequisites
+
+Before you start, make sure the following tools are installed and available on your system:
+
+| Requirement | Version |
+|---|---|
+| JDK | 11 or later |
+| Android Studio _or_ Gradle | Latest stable / 8.1+ |
+| Android SDK `compileSdk` | 33 (Android 13) |
+| Android NDK | 25.1.8937393 |
+| CMake | 3.22.1 |
+| Kotlin | 1.9.10 |
+
+<Note>
+  The NDK and CMake versions above are pinned in `app/build.gradle`. Using a
+  different NDK version may cause native compilation errors.
+</Note>
+
+## App version details
+
+| Property | Value |
+|---|---|
+| Application ID | `org.proxydroid` |
+| Version name | 3.4.0 |
+| Version code | 74 |
+| Min SDK | 21 (Android 5.0) |
+| Target SDK | 33 (Android 13) |
+
+## Build the APK
+
+<CodeGroup>
+
+```bash Command line
+# 1. Clone the repository
+git clone https://github.com/madeye/proxydroid.git
+cd proxydroid
+
+# 2. Point Gradle at your Android SDK
+export ANDROID_HOME=$HOME/Android/Sdk   # adjust to your SDK location
+
+# 3. Build a debug APK
+./gradlew assembleDebug
+
+# 4. The signed debug APK is written to:
+#    app/build/outputs/apk/debug/app-debug.apk
+```
+
+```text Android Studio
+1. Open the project in Android Studio (File > Open…)
+2. Wait for Gradle sync to complete (File > Sync Project with Gradle Files)
+3. Verify the NDK and CMake are installed via
+   SDK Manager > SDK Tools > NDK (Side by side) and CMake
+4. Select Build > Make Project (Ctrl+F9 / ⌘F9)
+5. The APK appears in app/build/outputs/apk/
+```
+
+</CodeGroup>
+
+## Install on a device
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/madeye/proxydroid.git
+    cd proxydroid
+    ```
+  </Step>
+
+  <Step title="Set the ANDROID_HOME environment variable">
+    ```bash
+    export ANDROID_HOME=$HOME/Android/Sdk
+    ```
+    On macOS the default path is typically `$HOME/Library/Android/sdk`.
+  </Step>
+
+  <Step title="Compile the debug APK">
+    ```bash
+    ./gradlew assembleDebug
+    ```
+    This also compiles the native libraries for all four supported ABIs via CMake.
+  </Step>
+
+  <Step title="Locate the output APK">
+    ```
+    app/build/outputs/apk/debug/app-debug.apk
+    ```
+  </Step>
+
+  <Step title="Install with ADB">
+    ```bash
+    adb install app/build/outputs/apk/debug/app-debug.apk
+    ```
+    Use `adb install -r` to reinstall over an existing version.
+  </Step>
+</Steps>
+
+## Release build
+
+```bash
+./gradlew assembleRelease
+```
+
+The release variant has `minifyEnabled false`, so no ProGuard shrinking is applied by default. You will need to sign the APK with your own keystore before distributing it.
+
+## Supported ABIs
+
+ProxyDroid ships native libraries for all four major Android ABIs, as defined by the `abiFilters` in `app/build.gradle`:
+
+```groovy
+ndk {
+    abiFilters 'x86', 'x86_64', 'armeabi-v7a', 'arm64-v8a'
+}
+```
+
+CMake compiles the native code separately for each ABI during a single Gradle build.
+
+<Warning>
+  The NDK must be installed before running the build. If it is missing, the
+  CMake step will fail with a `No toolchains found` error. Install it via
+  Android Studio's SDK Manager or by running
+  `sdkmanager "ndk;25.1.8937393"`.
+</Warning>
